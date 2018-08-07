@@ -4,7 +4,7 @@ from sc2.player import Bot, Computer
 from sc2.constants import NEXUS, PROBE, PYLON, ASSIMILATOR, GATEWAY, CYBERNETICSCORE, STALKER, STARGATE, VOIDRAY
 import random
 import cv2
-import numpy
+import numpy as np
 
 TargetNexusCount = 3
 TargetGatewayCount = 5
@@ -67,12 +67,12 @@ class SentdeBot(sc2.BotAI):
                 if self.can_afford(CYBERNETICSCORE) and not self.already_pending(CYBERNETICSCORE):
                     await self.build(CYBERNETICSCORE, near=pylon)
 
-            elif len(self.units(GATEWAY)) < TargetGatewayCount:
+            elif len(self.units(GATEWAY)) < 1:
                 if self.can_afford(GATEWAY) and not self.already_pending(GATEWAY):
                     await self.build(GATEWAY, near=pylon)
 
             if self.units(CYBERNETICSCORE).ready.exists:
-                if len(self.units(STARGATE))< ((self.iteration / self.ITERATIONS_PER_MINUTE)/2):
+                if len(self.units(STARGATE))< (self.iteration / self.ITERATIONS_PER_MINUTE):
                     if self.can_afford(STARGATE) and not self.already_pending(STARGATE):
                         await self.build(STARGATE, near = pylon)
 
@@ -96,19 +96,12 @@ class SentdeBot(sc2.BotAI):
 
     async def attack(self):
         #{UNIT: [n to fight, n to defend]}
-        agressive_units = {STALKER: [15, 5],
-                           VOIDRAY: [8,  3]}
+        agressive_units = {VOIDRAY: [8,  3]}
 
         for UNIT in agressive_units:
             if self.units(UNIT).amount > agressive_units[UNIT][0] and self.units(UNIT).amount > agressive_units[UNIT][1]:
                 for s in self.units(UNIT).idle:
                     await self.do(s.attack(self.find_target(self.state)))
-
-            elif self.units(UNIT).amount > agressive_units[UNIT][1]:
-                if len(self.known_enemy_units) > 0:
-                    for s in self.units(UNIT).idle:
-                        await self.do(s.attack(random.choice(self.known_enemy_units)))
-
 
 run_game(maps.get("AbyssalReefLE"), [
     Bot(Race.Protoss, SentdeBot()),

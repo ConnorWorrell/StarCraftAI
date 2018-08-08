@@ -18,12 +18,12 @@ class SentdeBot(sc2.BotAI):
 
     async def on_step(self, iteration):
         self.ElapsedTime = (self.state.game_loop / 22.4) / 60  # Time in min since start of game
-        await self.manufacture()
+        await self.manufacture()#Commands for making units
         await self.distribute_workers()
         await self.Queen_Control()
         await self.Creep_Control()
 
-    def EvaluateArmy(self):
+    def EvaluateArmy(self):#Figures out what needs to be made
         if(len(self.units(OVERLORD)) + self.already_pending(OVERLORD) < 2 or (self.supply_left < 6 and not self.already_pending(OVERLORD) and self.ElapsedTime > 1)):
             self.MostNeededTroop = 1 #Overlord
         elif len(self.units(DRONE)) < len(self.units(HATCHERY))*16 and (self.ElapsedTime > 1.3 or (self.already_pending(SPAWNINGPOOL) and self.already_pending(HATCHERY))) or len(self.units(DRONE)) < 14 and self.ElapsedTime < 1.3:
@@ -45,42 +45,42 @@ class SentdeBot(sc2.BotAI):
 
     async def manufacture(self):
 
-        for hatchers in self.units(HATCHERY).ready.noqueue:
+        for hatchers in self.units(HATCHERY).ready.noqueue:#Manufacture queen if you have 2 bases and have prerequesetes
             if self.can_afford(QUEEN) and self.minerals > 150 and len(self.units(SPAWNINGPOOL)) > 0 and len(self.units(QUEEN)) < 2 * len(self.units(HATCHERY)):
                 await self.do(hatchers.train(QUEEN))
                 print(str(self.ElapsedTime) + " Queen")
 
         for larvae in self.units(LARVA).ready:
-            self.EvaluateArmy()
-            if self.MostNeededTroop == 1 and self.can_afford(OVERLORD):
+            self.EvaluateArmy()#Request build target and build it
+            if self.MostNeededTroop == 1 and self.can_afford(OVERLORD):#Overlord
                 print(str(self.ElapsedTime) + " Overlord")
                 await self.do(larvae.train(OVERLORD))
 
-            elif self.MostNeededTroop == 2 and self.can_afford(DRONE) and self.supply_left > 0:
+            elif self.MostNeededTroop == 2 and self.can_afford(DRONE) and self.supply_left > 0:#Drone
                 print(str(self.ElapsedTime) + " Drone")
                 await self.do(larvae.train(DRONE))
 
-            elif self.MostNeededTroop == 3 and self.can_afford(SPAWNINGPOOL):
+            elif self.MostNeededTroop == 3 and self.can_afford(SPAWNINGPOOL):#Spawning Pool
                 print(str(self.ElapsedTime) + " SpawningPool")
                 Hatchery = self.units(HATCHERY).ready.random
                 await self.build(SPAWNINGPOOL, near=Hatchery)
 
-            elif self.MostNeededTroop == 4 and self.can_afford(HATCHERY):
+            elif self.MostNeededTroop == 4 and self.can_afford(HATCHERY):#Hatchery
                 print(str(self.ElapsedTime) + " Hatchery")
                 await self.expand_now()
 
-            elif self.MostNeededTroop == 5 and self.can_afford(EXTRACTOR):
+            elif self.MostNeededTroop == 5 and self.can_afford(EXTRACTOR):#Extractor
                 vaspene = self.state.vespene_geyser.closer_than(15.0, self.units(HATCHERY).ready[0])
                 worker = self.select_build_worker(vaspene[0].position)
                 if worker is not None:
                     print(str(self.ElapsedTime) + " Extractor")
                     await self.do(worker.build(EXTRACTOR, vaspene[0]))
 
-            elif self.MostNeededTroop == 6 and self.can_afford(ZERGLING):
+            elif self.MostNeededTroop == 6 and self.can_afford(ZERGLING):#Zergling
                 print(str(self.ElapsedTime) + " Zergling")
                 await self.do(larvae.train(ZERGLING))
 
-    def random_location_variance(self, OrigionalLocation, Offset):
+    def random_location_variance(self, OrigionalLocation, Offset):#take in location and output location randomly offset from it
         x = OrigionalLocation[0]
         y = OrigionalLocation[1]
 
@@ -99,20 +99,20 @@ class SentdeBot(sc2.BotAI):
         go_to = position.Point2(position.Pointlike((x,y)))
         return go_to
 
-    async def Queen_Control(self):
-        hatchery = self.units(HATCHERY).ready.first
+    async def Queen_Control(self):#Control the queen
+        hatchery = self.units(HATCHERY).ready.first#Find the first hachery !!!!!!!!!!!!!!!Change to closest hachery
         for queen in self.units(QUEEN).idle:
-            abilities = await self.get_available_abilities(queen)
+            abilities = await self.get_available_abilities(queen)#Check abilities
             if AbilityId.EFFECT_INJECTLARVA in abilities: #sptray hatcherys
                 await self.do(queen(EFFECT_INJECTLARVA, hatchery))
 
             if AbilityId.BUILD_CREEPTUMOR_QUEEN in abilities:# Randomly place creep near queens
                 await self.do(queen(BUILD_CREEPTUMOR_QUEEN, self.random_location_variance(queen.position, 2)))
 
-    async def Creep_Control(self):
+    async def Creep_Control(self):#Control the tumors that queens lay
         for creep in self.units(CREEPTUMORBURROWED).idle:
-            abilities = await self.get_available_abilities(creep)
-            if AbilityId.BUILD_CREEPTUMOR_TUMOR in abilities:
+            abilities = await self.get_available_abilities(creep)#Check if expandable
+            if AbilityId.BUILD_CREEPTUMOR_TUMOR in abilities:#expand randomly !!!!!!!!!!!!!!!!Change to be smart
                 await self.do(creep(BUILD_CREEPTUMOR_TUMOR, self.random_location_variance(creep.position, 7)))
 
 run_game(maps.get("AbyssalReefLE"), [

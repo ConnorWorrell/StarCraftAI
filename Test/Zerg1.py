@@ -5,7 +5,7 @@ from sc2.constants import CORRUPTOR, BROODLORD, DRONE, HYDRALISK, INFESTOR, LARV
     ROACH, ULTRALISK, ZERGLING, BANELING, BROODLING, CHANGELING, INFESTEDTERRAN, BANELINGNEST, CREEPTUMOR, \
     EVOLUTIONCHAMBER, EXTRACTOR, HATCHERY, LAIR, HIVE, HYDRALISKDEN, INFESTATIONPIT, NYDUSNETWORK, ROACHWARREN, \
     SPAWNINGPOOL, SPINECRAWLER, SPIRE, GREATERSPIRE, SPORECRAWLER, ULTRALISKCAVERN, EFFECT_INJECTLARVA, BUILD_CREEPTUMOR_QUEEN, \
-    AbilityId, CREEPTUMORQUEEN, CREEPTUMORBURROWED, BUILD_CREEPTUMOR_TUMOR
+    AbilityId, CREEPTUMORQUEEN, CREEPTUMORBURROWED, BUILD_CREEPTUMOR_TUMOR, BuffId, QUEENSPAWNLARVATIMER
 import random
 import cv2
 import numpy as np
@@ -15,16 +15,25 @@ class SentdeBot(sc2.BotAI):
     def __init__(self):
         self.MostNeededTroop = 0
         self.EarlySpawnPool = 0
+        self.incomingBuffHacheries = []
+        self.incomingBuffingQueens = []
 
     async def on_step(self, iteration):
+        #pos = self.start_location.position.towards(self.enemy_start_locations[0], 7)
+        #print(self.state.creep.is_set(pos))
         self.ElapsedTime = (self.state.game_loop / 22.4) / 60  # Time in min since start of game
         await self.manufacture()#Commands for making units
         await self.distribute_workers()
         await self.Queen_Control()
         await self.Creep_Control()
+        await self.Intel()
+
+    async def Intel(self):
+        game_data = np.zeros((self.game_info.map_size[1], self.game_info.map_size[0], 3), np.uint8)  # Generate base image
+
 
     def EvaluateArmy(self):#Figures out what needs to be made
-        if(len(self.units(OVERLORD)) + self.already_pending(OVERLORD) < 2 or (self.supply_left < 6 and not self.already_pending(OVERLORD) and self.ElapsedTime > 1)):
+        if(len(self.units(OVERLORD)) + self.already_pending(OVERLORD) < 2 or (self.supply_left < 6 and not self.already_pending(OVERLORD) and self.ElapsedTime > 1) or (self.supply_left < 10 and len(self.units(QUEEN)) > 0)):
             self.MostNeededTroop = 1 #Overlord
         elif len(self.units(DRONE)) < len(self.units(HATCHERY))*16 and (self.ElapsedTime > 1.3 or (self.already_pending(SPAWNINGPOOL) and self.already_pending(HATCHERY))) or len(self.units(DRONE)) < 14 and self.ElapsedTime < 1.3:
             self.MostNeededTroop = 2 #Drone
@@ -63,7 +72,7 @@ class SentdeBot(sc2.BotAI):
             elif self.MostNeededTroop == 3 and self.can_afford(SPAWNINGPOOL):#Spawning Pool
                 print(str(self.ElapsedTime) + " SpawningPool")
                 Hatchery = self.units(HATCHERY).ready.random
-                await self.build(SPAWNINGPOOL, near=Hatchery)
+                await self.build(SPAWNINGPOOL, near=self.start_location.position.towards(self.enemy_start_locations[0], 4))
 
             elif self.MostNeededTroop == 4 and self.can_afford(HATCHERY):#Hatchery
                 print(str(self.ElapsedTime) + " Hatchery")
@@ -100,20 +109,40 @@ class SentdeBot(sc2.BotAI):
         return go_to
 
     async def Queen_Control(self):#Control the queen
-        hatchery = self.units(HATCHERY).ready.first#Find the first hachery !!!!!!!!!!!!!!!Change to closest hachery
-        for queen in self.units(QUEEN).idle:
-            abilities = await self.get_available_abilities(queen)#Check abilities
-            if AbilityId.EFFECT_INJECTLARVA in abilities: #sptray hatcherys
-                await self.do(queen(EFFECT_INJECTLARVA, hatchery))
+        hatcherys = self.units(HATCHERY).ready
 
-            if AbilityId.BUILD_CREEPTUMOR_QUEEN in abilities:# Randomly place creep near queens
+        #for hachery in hatcherys:
+            #if(hachery.has_buff(BuffId.QUEENSPAWNLARVATIMER) == False):
+
+        for hachery in hatcherys:
+            print(str(self.incomingBuffHacheries) + str(self.incomingBuffingQueens))
+            if hachery.tag in self.incomingBuffHacheries and hachery.has_buff(BuffId.QUEENSPAWNLARVATIMER) == True:
+                index = self.incomingBuffHacheries.index(hachery.tag)
+                self.incomingBuffHacheries.remove(hachery.tag)
+                self.incomingBuffingQueens.remove(self.incomingBuffingQueens[index])
+
+            if (hachery.has_buff(BuffId.QUEENSPAWNLARVATIMER) == False) and not hachery.tag in self.incomingBuffHacheries and len(self.units(QUEEN).idle) > 0:
+                queen = self.units(QUEEN).idle.random #select which queen, !!!!!!!!!!!Change to closest
+                abilities = await self.get_available_abilities(queen)  # Check abilities
+                if AbilityId.EFFECT_INJECTLARVA in abilities and queen.energy > 25 and not queen.tag in self.incomingBuffingQueens:  # sptray hatcherys
+                    await self.do(queen(EFFECT_INJECTLARVA, hachery))
+                    self.incomingBuffHacheries.append(hachery.tag)
+                    self.incomingBuffingQueens.append(queen.tag)
+
+
+
+        for queen in self.units(QUEEN).idle:
+            abilities = await self.get_available_abilities(queen)  # Check abilities
+            if AbilityId.BUILD_CREEPTUMOR_QUEEN in abilities and len(self.units(CREEPTUMORBURROWED)) < 4 and not queen.tag in self.incomingBuffingQueens and queen.energy > 25:# Randomly place creep near queens
                 await self.do(queen(BUILD_CREEPTUMOR_QUEEN, self.random_location_variance(queen.position, 2)))
 
     async def Creep_Control(self):#Control the tumors that queens lay
         for creep in self.units(CREEPTUMORBURROWED).idle:
             abilities = await self.get_available_abilities(creep)#Check if expandable
             if AbilityId.BUILD_CREEPTUMOR_TUMOR in abilities:#expand randomly !!!!!!!!!!!!!!!!Change to be smart
-                await self.do(creep(BUILD_CREEPTUMOR_TUMOR, self.random_location_variance(creep.position, 7)))
+                pos = creep.position.towards(self.enemy_start_locations[0], 7)
+                #if self.state.creep
+                #await self.do(creep(BUILD_CREEPTUMOR_TUMOR, pos))
 
 run_game(maps.get("AbyssalReefLE"), [
     Bot(Race.Zerg, SentdeBot()),

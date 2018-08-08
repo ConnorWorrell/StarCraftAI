@@ -17,7 +17,6 @@ Headless = False
 
 class SentdeBot(sc2.BotAI):
     def __init__(self):
-        self.ITERATIONS_PER_MINUTE = 165
         self.MAX_WORKERS = 65
         self.do_something_after = 0
         self.train_data = []
@@ -30,7 +29,7 @@ class SentdeBot(sc2.BotAI):
             np.save("train_data{}.mpy".format(str(int(time.time()))), np.array(self.train_data))
 
     async def on_step(self, iteration):
-        self.iteration = iteration
+        self.ElapsedTime = (self.state.game_loop/22.4) / 60 #Time in min since start of game
         await self.scout()
         await self.distribute_workers()
         await self.build_workers()
@@ -192,7 +191,7 @@ class SentdeBot(sc2.BotAI):
         if self.units(PYLON).ready.exists:
             pylon = self.units(PYLON).ready.random
 
-            TargetGatewayCount = (self.iteration / self.ITERATIONS_PER_MINUTE)/2 #Target 1 gateway built per minute in game
+            TargetGatewayCount = (self.ElapsedTime)/2 #Target 1 gateway built per minute in game
 
             if self.units(GATEWAY).ready.exists and not self.units(CYBERNETICSCORE):
                 if self.can_afford(CYBERNETICSCORE) and not self.already_pending(CYBERNETICSCORE):
@@ -206,7 +205,7 @@ class SentdeBot(sc2.BotAI):
                 await self.build(ROBOTICSFACILITY, near=pylon)
 
             if self.units(CYBERNETICSCORE).ready.exists:
-                if len(self.units(STARGATE))< (self.iteration / self.ITERATIONS_PER_MINUTE):
+                if len(self.units(STARGATE))< (self.ElapsedTime):
                     if self.can_afford(STARGATE) and not self.already_pending(STARGATE):
                         await self.build(STARGATE, near = pylon)
 
@@ -233,30 +232,11 @@ class SentdeBot(sc2.BotAI):
             choice = random.randrange(0,4)
 
             target = False
-            if self.iteration > self.do_something_after:
-                if choice == 0:#Do nothing
-                    wait = random.randrange(20,165)
-                    self.do_something_after = self.iteration + wait
 
-                elif choice == 1:#Attack unit closest to nexus
-                    if len(self.known_enemy_units) > 0:
-                        target = self.known_enemy_units.closest_to(random.choice(self.units(NEXUS)))
+            if target:
+                for vr in self.units(VOIDRAY).idle:
+                    await self.do(vr.attack(target))
 
-                elif choice == 2:#Attack enemy start locaton
-                    if len(self.known_enemy_structures) > 0:
-                        target = random.choice(self.known_enemy_structures)
-
-                elif choice == 3:#Attack enemy start location
-                    target = self.enemy_start_locations[0]
-
-                if target:
-                    for vr in self.units(VOIDRAY).idle:
-                        await self.do(vr.attack(target))
-
-                y = np.zeros(4)
-                y[choice]=1
-                print(y)
-                self.train_data.append([y, self.flipped])
 
 run_game(maps.get("AbyssalReefLE"), [
     Bot(Race.Protoss, SentdeBot()),

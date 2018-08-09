@@ -10,6 +10,7 @@ import random
 import cv2
 import numpy as np
 import time
+import math
 
 class SentdeBot(sc2.BotAI):
     def __init__(self):
@@ -55,7 +56,7 @@ class SentdeBot(sc2.BotAI):
     async def manufacture(self):
 
         for hatchers in self.units(HATCHERY).ready.noqueue:#Manufacture queen if you have 2 bases and have prerequesetes
-            if self.can_afford(QUEEN) and self.minerals > 150 and len(self.units(SPAWNINGPOOL)) > 0 and len(self.units(QUEEN)) < 2 * len(self.units(HATCHERY)):
+            if self.can_afford(QUEEN) and self.minerals > 150 and len(self.units(SPAWNINGPOOL).ready) > 0 and len(self.units(QUEEN)) < 2 * len(self.units(HATCHERY)):
                 await self.do(hatchers.train(QUEEN))
                 print(str(self.ElapsedTime) + " Queen")
 
@@ -115,21 +116,30 @@ class SentdeBot(sc2.BotAI):
             #if(hachery.has_buff(BuffId.QUEENSPAWNLARVATIMER) == False):
 
         for hachery in hatcherys:
-            print(str(self.incomingBuffHacheries) + str(self.incomingBuffingQueens))
+            #print(str(self.incomingBuffHacheries) + str(self.incomingBuffingQueens))
             if hachery.tag in self.incomingBuffHacheries and hachery.has_buff(BuffId.QUEENSPAWNLARVATIMER) == True:
                 index = self.incomingBuffHacheries.index(hachery.tag)
                 self.incomingBuffHacheries.remove(hachery.tag)
                 self.incomingBuffingQueens.remove(self.incomingBuffingQueens[index])
 
             if (hachery.has_buff(BuffId.QUEENSPAWNLARVATIMER) == False) and not hachery.tag in self.incomingBuffHacheries and len(self.units(QUEEN).idle) > 0:
-                queen = self.units(QUEEN).idle.random #select which queen, !!!!!!!!!!!Change to closest
+                lowestDist = 100
+                print("---StartingSelection---")
+                queen = self.units(QUEEN).idle.random
+                for queenCandidate in self.units(QUEEN).idle: #select which queen, !!!!!!!!!!!Change to closest
+                    abilities = await self.get_available_abilities(queenCandidate)  # Check abilities
+                    if AbilityId.EFFECT_INJECTLARVA in abilities and queenCandidate.energy > 25 and not queenCandidate.tag in self.incomingBuffingQueens:  # sptray hatcherys
+                        Dist = math.sqrt(((queenCandidate.position[0] - hachery.position[0]) + abs(queenCandidate.position[1] - hachery.position[1])) * ((queenCandidate.position[0] - hachery.position[0]) + abs(queenCandidate.position[1] - hachery.position[1])))
+                        print(Dist)
+                        if Dist < lowestDist:
+                            lowestDist = Dist
+                            queen = queenCandidate
                 abilities = await self.get_available_abilities(queen)  # Check abilities
                 if AbilityId.EFFECT_INJECTLARVA in abilities and queen.energy > 25 and not queen.tag in self.incomingBuffingQueens:  # sptray hatcherys
+                    print(lowestDist)
                     await self.do(queen(EFFECT_INJECTLARVA, hachery))
                     self.incomingBuffHacheries.append(hachery.tag)
                     self.incomingBuffingQueens.append(queen.tag)
-
-
 
         for queen in self.units(QUEEN).idle:
             abilities = await self.get_available_abilities(queen)  # Check abilities

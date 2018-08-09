@@ -31,22 +31,13 @@ class SentdeBot(sc2.BotAI):
 
     async def Intel(self):
         VisMap = np.reshape(np.array(list(self.state.creep.data)), (self.state.creep.height, self.state.creep.width))
-        if(self.ElapsedTime > 0):
-            game_data = np.zeros((self.state.creep.height, self.state.creep.width, 3), np.uint8)  # Generate base image
-            for heightrow in range(self.state.creep.height):
-                for widthrow in range(self.state.creep.width):
-                    if(VisMap[heightrow,widthrow] == 0):
-                        cv2.circle(game_data, (int(heightrow), int(widthrow)), 1, (0,0,0), -1)  # Draw a circle for nexus
-                    elif (VisMap[heightrow, widthrow] == 1):
-                        print(str(heightrow), str(widthrow))
-                        cv2.circle(game_data, (int(heightrow), int(widthrow)), 1, (127, 127, 127), -1)  # Draw a circle for nexus
-                    else:
-                        cv2.circle(game_data, (int(heightrow), int(widthrow)), 1, (255, 255, 255), -1)  # Draw a circle for nexus
-                #print("Test")
 
-            resized = cv2.resize(game_data, dsize=None, fx=2, fy=2)  # size image up for display on screen
-            cv2.imshow('Intel', resized)
-            cv2.waitKey(1)
+        image = np.array(VisMap * 255, dtype = np.uint8)
+
+
+        #resized = cv2.resize(VisMap, (200,200))  # size image up for display on screen
+        cv2.imshow('Intel', image)
+        cv2.waitKey(1)
 
         if(self.units(QUEEN).exists):
             unit = self.units(QUEEN)[0]

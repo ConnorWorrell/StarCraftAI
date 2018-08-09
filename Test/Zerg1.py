@@ -63,31 +63,31 @@ class SentdeBot(sc2.BotAI):
         for larvae in self.units(LARVA).ready:
             self.EvaluateArmy()#Request build target and build it
             if self.MostNeededTroop == 1 and self.can_afford(OVERLORD):#Overlord
-                print(str(self.ElapsedTime) + " Overlord")
+                #print(str(self.ElapsedTime) + " Overlord")
                 await self.do(larvae.train(OVERLORD))
 
             elif self.MostNeededTroop == 2 and self.can_afford(DRONE) and self.supply_left > 0:#Drone
-                print(str(self.ElapsedTime) + " Drone")
+                #print(str(self.ElapsedTime) + " Drone")
                 await self.do(larvae.train(DRONE))
 
             elif self.MostNeededTroop == 3 and self.can_afford(SPAWNINGPOOL):#Spawning Pool
-                print(str(self.ElapsedTime) + " SpawningPool")
+                #print(str(self.ElapsedTime) + " SpawningPool")
                 Hatchery = self.units(HATCHERY).ready.random
                 await self.build(SPAWNINGPOOL, near=self.start_location.position.towards(self.enemy_start_locations[0], 4))
 
             elif self.MostNeededTroop == 4 and self.can_afford(HATCHERY):#Hatchery
-                print(str(self.ElapsedTime) + " Hatchery")
+                #print(str(self.ElapsedTime) + " Hatchery")
                 await self.expand_now()
 
             elif self.MostNeededTroop == 5 and self.can_afford(EXTRACTOR):#Extractor
                 vaspene = self.state.vespene_geyser.closer_than(15.0, self.units(HATCHERY).ready[0])
                 worker = self.select_build_worker(vaspene[0].position)
                 if worker is not None:
-                    print(str(self.ElapsedTime) + " Extractor")
+                    #print(str(self.ElapsedTime) + " Extractor")
                     await self.do(worker.build(EXTRACTOR, vaspene[0]))
 
             elif self.MostNeededTroop == 6 and self.can_afford(ZERGLING):#Zergling
-                print(str(self.ElapsedTime) + " Zergling")
+                #print(str(self.ElapsedTime) + " Zergling")
                 await self.do(larvae.train(ZERGLING))
 
     def random_location_variance(self, OrigionalLocation, Offset):#take in location and output location randomly offset from it
@@ -115,6 +115,20 @@ class SentdeBot(sc2.BotAI):
         #for hachery in hatcherys:
             #if(hachery.has_buff(BuffId.QUEENSPAWNLARVATIMER) == False):
 
+        incomingBuffingQueensDupe = self.incomingBuffingQueens[:]
+        for queen in self.units(QUEEN):
+            if(queen.tag in incomingBuffingQueensDupe):
+                await self.do(self.units.find_by_tag(queen.tag)(EFFECT_INJECTLARVA, self.units.find_by_tag(self.incomingBuffHacheries[self.incomingBuffingQueens.index(queen.tag)])))
+                self.units.find_by_tag(queen.tag)
+                incomingBuffingQueensDupe.remove(queen.tag)
+        #print(incomingBuffingQueensDupe)
+        for DeadQueens in incomingBuffingQueensDupe:
+            print("QueenDead")
+            index = self.incomingBuffingQueens.index(DeadQueens)
+            self.incomingBuffingQueens.remove(self.incomingBuffingQueens[index])
+            self.incomingBuffHacheries.remove(self.incomingBuffHacheries[index])
+
+
         for hachery in hatcherys:
             #print(str(self.incomingBuffHacheries) + str(self.incomingBuffingQueens))
             if hachery.tag in self.incomingBuffHacheries and hachery.has_buff(BuffId.QUEENSPAWNLARVATIMER) == True:
@@ -124,7 +138,6 @@ class SentdeBot(sc2.BotAI):
 
             if (hachery.has_buff(BuffId.QUEENSPAWNLARVATIMER) == False) and not hachery.tag in self.incomingBuffHacheries and len(self.units(QUEEN).idle) > 0:
                 lowestDist = 100
-                print("---StartingSelection---")
                 queen = self.units(QUEEN).idle.random
                 for queenCandidate in self.units(QUEEN).idle: #select which queen, !!!!!!!!!!!Change to closest
                     abilities = await self.get_available_abilities(queenCandidate)  # Check abilities

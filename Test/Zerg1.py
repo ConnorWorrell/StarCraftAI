@@ -1,5 +1,5 @@
 import sc2
-from sc2 import run_game, maps, Race, Difficulty, position, Result
+from sc2 import run_game, maps, Race, Difficulty, position, Result, game_state
 from sc2.player import Bot, Computer
 from sc2.constants import CORRUPTOR, BROODLORD, DRONE, HYDRALISK, INFESTOR, LARVA, MUTALISK, OVERLORD, OVERSEER, QUEEN, \
     ROACH, ULTRALISK, ZERGLING, BANELING, BROODLING, CHANGELING, INFESTEDTERRAN, BANELINGNEST, CREEPTUMOR, \
@@ -30,8 +30,30 @@ class SentdeBot(sc2.BotAI):
         await self.Intel()
 
     async def Intel(self):
-        game_data = np.zeros((self.game_info.map_size[1], self.game_info.map_size[0], 3), np.uint8)  # Generate base image
+        VisMap = np.reshape(np.array(list(self.state.creep.data)), (self.state.creep.height, self.state.creep.width))
+        if(self.ElapsedTime > 0):
+            game_data = np.zeros((self.state.creep.height, self.state.creep.width, 3), np.uint8)  # Generate base image
+            for heightrow in range(self.state.creep.height):
+                for widthrow in range(self.state.creep.width):
+                    if(VisMap[heightrow,widthrow] == 0):
+                        cv2.circle(game_data, (int(heightrow), int(widthrow)), 1, (0,0,0), -1)  # Draw a circle for nexus
+                    elif (VisMap[heightrow, widthrow] == 1):
+                        print(str(heightrow), str(widthrow))
+                        cv2.circle(game_data, (int(heightrow), int(widthrow)), 1, (127, 127, 127), -1)  # Draw a circle for nexus
+                    else:
+                        cv2.circle(game_data, (int(heightrow), int(widthrow)), 1, (255, 255, 255), -1)  # Draw a circle for nexus
+                #print("Test")
 
+            resized = cv2.resize(game_data, dsize=None, fx=2, fy=2)  # size image up for display on screen
+            cv2.imshow('Intel', resized)
+            cv2.waitKey(1)
+
+        if(self.units(QUEEN).exists):
+            unit = self.units(QUEEN)[0]
+            print(str(unit.position) + " " + str(VisMap[int(unit.position[0]), int(unit.position[1])]))
+
+
+        #print("Break")
 
     def EvaluateArmy(self):#Figures out what needs to be made
         if(len(self.units(OVERLORD)) + self.already_pending(OVERLORD) < 2 or (self.supply_left < 6 and not self.already_pending(OVERLORD) and self.ElapsedTime > 1) or (self.supply_left < 10 and len(self.units(QUEEN)) > 0)):
@@ -57,8 +79,9 @@ class SentdeBot(sc2.BotAI):
 
         for hatchers in self.units(HATCHERY).ready.noqueue:#Manufacture queen if you have 2 bases and have prerequesetes
             if self.can_afford(QUEEN) and self.minerals > 150 and len(self.units(SPAWNINGPOOL).ready) > 0 and len(self.units(QUEEN)) < 2 * len(self.units(HATCHERY)):
-                await self.do(hatchers.train(QUEEN))
-                print(str(self.ElapsedTime) + " Queen")
+                none = 1
+                #await self.do(hatchers.train(QUEEN))
+                #print(str(self.ElapsedTime) + " Queen")
 
         for larvae in self.units(LARVA).ready:
             self.EvaluateArmy()#Request build target and build it
@@ -118,12 +141,12 @@ class SentdeBot(sc2.BotAI):
         incomingBuffingQueensDupe = self.incomingBuffingQueens[:]
         for queen in self.units(QUEEN):
             if(queen.tag in incomingBuffingQueensDupe):
-                await self.do(self.units.find_by_tag(queen.tag)(EFFECT_INJECTLARVA, self.units.find_by_tag(self.incomingBuffHacheries[self.incomingBuffingQueens.index(queen.tag)])))
-                self.units.find_by_tag(queen.tag)
+                #await self.do(self.units.find_by_tag(queen.tag)(EFFECT_INJECTLARVA, self.units.find_by_tag(self.incomingBuffHacheries[self.incomingBuffingQueens.index(queen.tag)])))
+                #self.units.find_by_tag(queen.tag)
                 incomingBuffingQueensDupe.remove(queen.tag)
         #print(incomingBuffingQueensDupe)
         for DeadQueens in incomingBuffingQueensDupe:
-            print("QueenDead")
+            #print("QueenDead")
             index = self.incomingBuffingQueens.index(DeadQueens)
             self.incomingBuffingQueens.remove(self.incomingBuffingQueens[index])
             self.incomingBuffHacheries.remove(self.incomingBuffHacheries[index])
@@ -143,13 +166,13 @@ class SentdeBot(sc2.BotAI):
                     abilities = await self.get_available_abilities(queenCandidate)  # Check abilities
                     if AbilityId.EFFECT_INJECTLARVA in abilities and queenCandidate.energy > 25 and not queenCandidate.tag in self.incomingBuffingQueens:  # sptray hatcherys
                         Dist = math.sqrt(((queenCandidate.position[0] - hachery.position[0]) + abs(queenCandidate.position[1] - hachery.position[1])) * ((queenCandidate.position[0] - hachery.position[0]) + abs(queenCandidate.position[1] - hachery.position[1])))
-                        print(Dist)
+                        #print(Dist)
                         if Dist < lowestDist:
                             lowestDist = Dist
                             queen = queenCandidate
                 abilities = await self.get_available_abilities(queen)  # Check abilities
                 if AbilityId.EFFECT_INJECTLARVA in abilities and queen.energy > 25 and not queen.tag in self.incomingBuffingQueens:  # sptray hatcherys
-                    print(lowestDist)
+                    #print(lowestDist)
                     await self.do(queen(EFFECT_INJECTLARVA, hachery))
                     self.incomingBuffHacheries.append(hachery.tag)
                     self.incomingBuffingQueens.append(queen.tag)

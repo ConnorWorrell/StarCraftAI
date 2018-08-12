@@ -5,7 +5,7 @@ from sc2.constants import CORRUPTOR, BROODLORD, DRONE, HYDRALISK, INFESTOR, LARV
     ROACH, ULTRALISK, ZERGLING, BANELING, BROODLING, CHANGELING, INFESTEDTERRAN, BANELINGNEST, CREEPTUMOR, \
     EVOLUTIONCHAMBER, EXTRACTOR, HATCHERY, LAIR, HIVE, HYDRALISKDEN, INFESTATIONPIT, NYDUSNETWORK, ROACHWARREN, \
     SPAWNINGPOOL, SPINECRAWLER, SPIRE, GREATERSPIRE, SPORECRAWLER, ULTRALISKCAVERN, EFFECT_INJECTLARVA, BUILD_CREEPTUMOR_QUEEN, \
-    AbilityId, CREEPTUMORQUEEN, CREEPTUMORBURROWED, BUILD_CREEPTUMOR_TUMOR, BuffId, QUEENSPAWNLARVATIMER
+    AbilityId, CREEPTUMORQUEEN, CREEPTUMORBURROWED, BUILD_CREEPTUMOR_TUMOR, BuffId, QUEENSPAWNLARVATIMER, ZERGBUILD_CREEPTUMOR
 import random
 import cv2
 import numpy as np
@@ -18,6 +18,7 @@ class SentdeBot(sc2.BotAI):
         self.EarlySpawnPool = 0
         self.incomingBuffHacheries = []
         self.incomingBuffingQueens = []
+        self.UnCreepable = []
 
     async def on_step(self, iteration):
         #pos = self.start_location.position.towards(self.enemy_start_locations[0], 7)
@@ -30,23 +31,29 @@ class SentdeBot(sc2.BotAI):
         await self.Intel()
 
     async def Intel(self):
-        VisMap = np.reshape(np.array(list(self.state.creep.data)), (self.state.creep.height, self.state.creep.width))
+        self.CreepMap = np.reshape(np.array(list(self.state.creep.data)), (self.state.creep.height, self.state.creep.width))
+        self.VisMap = np.reshape(np.array(list(self.state.visibility.data)), (self.state.visibility.height, self.state.visibility.width))
+        self.UnitMap = np.zeros((self.state.visibility.height, self.state.visibility.width))
 
-        if (self.units(QUEEN).exists):
+        if (self.units(QUEEN).exists and -1 > 0):
             unit = self.units(QUEEN)[0]
             print(str(unit.position) + " " + str(
-                VisMap[int(self.state.creep.height - unit.position[1])][int(unit.position[0])]))
+                self.VisMap[int(self.state.creep.height - unit.position[1])][int(unit.position[0])]))
 
         for unit in self.units:
-            VisMap[int(self.state.creep.height - unit.position[1])][int(unit.position[0])] = 2
+            self.UnitMap[int(self.state.creep.height - unit.position[1])][int(unit.position[0])] = 2
 
-        image = np.array(VisMap * 127, dtype=np.uint8)
+        UnitImage = np.array(self.UnitMap * 255, dtype=np.uint8)
+        VisImage = np.array(self.VisMap * 127, dtype=np.uint8)
+        CreepImage = np.array(self.CreepMap * 255, dtype=np.uint8)
 
         #resized = cv2.resize(VisMap, (200,200))  # size image up for display on screen
-        cv2.imshow('Intel', image)
+        cv2.imshow('Units', UnitImage)
+        cv2.imshow('Visibility', VisImage)
+        cv2.imshow('Creep', CreepImage)
         cv2.waitKey(1)
 
-
+                    #print(str(await self.can_place(ZERGBUILD_CREEPTUMOR, position.Point2(position.Pointlike(([ x, y ]))))) + " " + str(x) + " " + str(y))
 
 
         #print("Break")
@@ -75,8 +82,8 @@ class SentdeBot(sc2.BotAI):
 
         for hatchers in self.units(HATCHERY).ready.noqueue:#Manufacture queen if you have 2 bases and have prerequesetes
             if self.can_afford(QUEEN) and self.minerals > 150 and len(self.units(SPAWNINGPOOL).ready) > 0 and len(self.units(QUEEN)) < 2 * len(self.units(HATCHERY)):
-                none = 1
-                #await self.do(hatchers.train(QUEEN))
+                #none = 1
+                await self.do(hatchers.train(QUEEN))
                 #print(str(self.ElapsedTime) + " Queen")
 
         for larvae in self.units(LARVA).ready:
@@ -175,16 +182,41 @@ class SentdeBot(sc2.BotAI):
 
         for queen in self.units(QUEEN).idle:
             abilities = await self.get_available_abilities(queen)  # Check abilities
-            if AbilityId.BUILD_CREEPTUMOR_QUEEN in abilities and len(self.units(CREEPTUMORBURROWED)) < 4 and not queen.tag in self.incomingBuffingQueens and queen.energy > 25:# Randomly place creep near queens
+            if not queen.tag in self.incomingBuffingQueens and queen.energy > 25:# Randomly place creep near queens
+                #test = 1
                 await self.do(queen(BUILD_CREEPTUMOR_QUEEN, self.random_location_variance(queen.position, 2)))
 
     async def Creep_Control(self):#Control the tumors that queens lay
         for creep in self.units(CREEPTUMORBURROWED).idle:
             abilities = await self.get_available_abilities(creep)#Check if expandable
             if AbilityId.BUILD_CREEPTUMOR_TUMOR in abilities:#expand randomly !!!!!!!!!!!!!!!!Change to be smart
-                pos = creep.position.towards(self.enemy_start_locations[0], 7)
+                pos = creep.position
                 #if self.state.creep
                 #await self.do(creep(BUILD_CREEPTUMOR_TUMOR, pos))
+                BestPosition = []
+                BestLength = 0
+                MaxRange = 13
+                Positions = []
+                for PossibleCreepPositionX in range(MaxRange):
+                    for PossibleCreepPositionY in range(MaxRange):
+                        Positions.append(position.Point2(position.Pointlike((PossibleCreepPositionX + pos[0] - int(MaxRange/2),PossibleCreepPositionY + pos[1] - int(MaxRange/2)))))
+
+                random.shuffle(Positions)
+                Length = 0
+                for position1 in Positions:
+                    Length = math.sqrt(((position1[0] - pos[0]) * (position1[0] - pos[0])) + ((position1[0] - pos[0]) * (position1[0] - pos[0])))
+                    if((Length > BestLength or Length == 0) and position1 not in self.UnCreepable):
+                            BestLength = Length
+                            print(BestLength)
+                            BestPosition = position1
+
+                if(BestPosition != []):
+                    err = await self.do(creep(BUILD_CREEPTUMOR_TUMOR, position.Point2(position.Pointlike((BestPosition[0],BestPosition[1])))))
+                    print(err)
+                    if(err == None):
+                        self.UnCreepable.append(BestPosition)
+        print(self.UnCreepable)
+
 
 run_game(maps.get("AbyssalReefLE"), [
     Bot(Race.Zerg, SentdeBot()),

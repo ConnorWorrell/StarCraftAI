@@ -32,16 +32,21 @@ class SentdeBot(sc2.BotAI):
     async def Intel(self):
         VisMap = np.reshape(np.array(list(self.state.creep.data)), (self.state.creep.height, self.state.creep.width))
 
-        image = np.array(VisMap * 255, dtype = np.uint8)
+        if (self.units(QUEEN).exists):
+            unit = self.units(QUEEN)[0]
+            print(str(unit.position) + " " + str(
+                VisMap[int(self.state.creep.height - unit.position[1])][int(unit.position[0])]))
 
+        for unit in self.units:
+            VisMap[int(self.state.creep.height - unit.position[1])][int(unit.position[0])] = 2
+
+        image = np.array(VisMap * 127, dtype=np.uint8)
 
         #resized = cv2.resize(VisMap, (200,200))  # size image up for display on screen
         cv2.imshow('Intel', image)
         cv2.waitKey(1)
 
-        if(self.units(QUEEN).exists):
-            unit = self.units(QUEEN)[0]
-            print(str(unit.position) + " " + str(VisMap[int(unit.position[0]), int(unit.position[1])]))
+
 
 
         #print("Break")

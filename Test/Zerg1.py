@@ -21,6 +21,9 @@ class SentdeBot(sc2.BotAI):
         self.UnCreepable = []
         self.RequestVisibilty = []
         self.PositionsVisibiltySent = []
+        self.OverlordsSent = []
+        self.expansionLocationsSorted = []
+        self.Initial = 0
 
     async def on_step(self, iteration):
         #pos = self.start_location.position.towards(self.enemy_start_locations[0], 7)
@@ -33,10 +36,21 @@ class SentdeBot(sc2.BotAI):
         await self.Intel()
         await self.Overlord_Control()
 
+        if(self.Initial == 0):
+            for location in self.expansion_locations:
+                self.expansionLocationsSorted.append([location, self.enemy_start_locations[0].distance_to(location)])
+            self.expansionLocationsSorted.sort(key=lambda x: x[1])
+            self.Initial = 1
+            print(self.expansionLocationsSorted)
+
     async def Intel(self):
         self.CreepMap = np.reshape(np.array(list(self.state.creep.data)), (self.state.creep.height, self.state.creep.width))
         self.VisMap = np.reshape(np.array(list(self.state.visibility.data)), (self.state.visibility.height, self.state.visibility.width))
         self.UnitMap = np.zeros((self.state.visibility.height, self.state.visibility.width))
+        #self.PlaceMap = np.reshape(np.array(list(self.game_info.placement_grid)), (self.state.visibility.height, self.state.visibility.width))
+        #map_ramps
+        #playable_area
+        #pathing_grid
 
         if (self.units(QUEEN).exists and -1 > 0):
             unit = self.units(QUEEN)[0]
@@ -49,11 +63,13 @@ class SentdeBot(sc2.BotAI):
         UnitImage = np.array(self.UnitMap * 255, dtype=np.uint8)
         VisImage = np.array(self.VisMap * 127, dtype=np.uint8)
         CreepImage = np.array(self.CreepMap * 255, dtype=np.uint8)
+        #PlaceImage = np.array(self.PlaceMap * 255, dtype=np.uint8)
 
         #resized = cv2.resize(VisMap, (200,200))  # size image up for display on screen
         cv2.imshow('Units', UnitImage)
         cv2.imshow('Visibility', VisImage)
         cv2.imshow('Creep', CreepImage)
+        #cv2.imshow('Creep', PlaceImage)
         cv2.waitKey(1)
 
                     #print(str(await self.can_place(ZERGBUILD_CREEPTUMOR, position.Point2(position.Pointlike(([ x, y ]))))) + " " + str(x) + " " + str(y))
@@ -225,8 +241,19 @@ class SentdeBot(sc2.BotAI):
                     elif(err):
                         self.UnCreepable.append(BestPosition)
         #print(self.UnCreepable)
+        #d = await self._client.query_pathing(th.position, el)
 
     async def Overlord_Control(self):
+
+        for Overlord in range(len(self.units(OVERLORD).idle)):
+            if(self.units(OVERLORD).idle[Overlord] not in self.OverlordsSent and self.expansionLocationsSorted != []):
+                print(len(self.expansionLocationsSorted))
+                print(len(self.OverlordsSent))
+                if(len(self.expansionLocationsSorted) > len(self.OverlordsSent)):
+                    Position = self.expansionLocationsSorted[len(self.OverlordsSent)][0]
+                    await self.do(self.units(OVERLORD)[Overlord].attack(Position))
+                    self.OverlordsSent.append(self.units(OVERLORD)[Overlord].tag)
+
         for Position in self.RequestVisibilty:
             if Position not in self.PositionsVisibiltySent:
                 await self.do(self.units(OVERLORD).idle[0].attack(Position))

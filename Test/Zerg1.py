@@ -1,5 +1,5 @@
 import sc2
-from sc2 import run_game, maps, Race, Difficulty, position, Result, game_state
+from sc2 import run_game, maps, Race, Difficulty, position, Result, game_state, ActionResult
 from sc2.player import Bot, Computer
 from sc2.constants import CORRUPTOR, BROODLORD, DRONE, HYDRALISK, INFESTOR, LARVA, MUTALISK, OVERLORD, OVERSEER, QUEEN, \
     ROACH, ULTRALISK, ZERGLING, BANELING, BROODLING, CHANGELING, INFESTEDTERRAN, BANELINGNEST, CREEPTUMOR, \
@@ -19,6 +19,8 @@ class SentdeBot(sc2.BotAI):
         self.incomingBuffHacheries = []
         self.incomingBuffingQueens = []
         self.UnCreepable = []
+        self.RequestVisibilty = []
+        self.PositionsVisibiltySent = []
 
     async def on_step(self, iteration):
         #pos = self.start_location.position.towards(self.enemy_start_locations[0], 7)
@@ -29,6 +31,7 @@ class SentdeBot(sc2.BotAI):
         await self.Queen_Control()
         await self.Creep_Control()
         await self.Intel()
+        await self.Overlord_Control()
 
     async def Intel(self):
         self.CreepMap = np.reshape(np.array(list(self.state.creep.data)), (self.state.creep.height, self.state.creep.width))
@@ -183,40 +186,51 @@ class SentdeBot(sc2.BotAI):
         for queen in self.units(QUEEN).idle:
             abilities = await self.get_available_abilities(queen)  # Check abilities
             if not queen.tag in self.incomingBuffingQueens and queen.energy > 25:# Randomly place creep near queens
-                #test = 1
-                await self.do(queen(BUILD_CREEPTUMOR_QUEEN, self.random_location_variance(queen.position, 2)))
+                test = 1
+                #await self.do(queen(BUILD_CREEPTUMOR_QUEEN, self.random_location_variance(queen.position, 2)))
 
     async def Creep_Control(self):#Control the tumors that queens lay
         for creep in self.units(CREEPTUMORBURROWED).idle:
             abilities = await self.get_available_abilities(creep)#Check if expandable
             if AbilityId.BUILD_CREEPTUMOR_TUMOR in abilities:#expand randomly !!!!!!!!!!!!!!!!Change to be smart
-                pos = creep.position
+                CreepPos = creep.position
                 #if self.state.creep
                 #await self.do(creep(BUILD_CREEPTUMOR_TUMOR, pos))
                 BestPosition = []
-                BestLength = 0
+                BestLength = 10000
                 MaxRange = 13
                 Positions = []
                 for PossibleCreepPositionX in range(MaxRange):
                     for PossibleCreepPositionY in range(MaxRange):
-                        Positions.append(position.Point2(position.Pointlike((PossibleCreepPositionX + pos[0] - int(MaxRange/2),PossibleCreepPositionY + pos[1] - int(MaxRange/2)))))
+                        Positions.append(position.Point2(position.Pointlike((PossibleCreepPositionX + CreepPos[0] - int(MaxRange/2),PossibleCreepPositionY + CreepPos[1] - int(MaxRange/2)))))
 
                 random.shuffle(Positions)
                 Length = 0
+                pos = self.enemy_start_locations[0].position
                 for position1 in Positions:
-                    Length = math.sqrt(((position1[0] - pos[0]) * (position1[0] - pos[0])) + ((position1[0] - pos[0]) * (position1[0] - pos[0])))
-                    if((Length > BestLength or Length == 0) and position1 not in self.UnCreepable):
-                            BestLength = Length
-                            print(BestLength)
-                            BestPosition = position1
+                    #for OtherCreep in self.units(CREEPTUMORBURROWED):
+                    Length = math.sqrt(((position1[0] - pos[0]) * (position1[0] - pos[0])) + ((position1[1] - pos[1]) * (position1[1] - pos[1])))
+                    LengthActual = math.sqrt(((position1[0] - CreepPos[0]) * (position1[0] - CreepPos[0])) + ((position1[1] - CreepPos[1]) * (position1[1] - CreepPos[1])))
+                    print(BestLength)
+                    if((Length < BestLength and Length != 0) and position1 not in self.UnCreepable and abs(LengthActual <= MaxRange)):
+                        BestLength = Length
+                        print(BestLength)
+                        BestPosition = position1
 
                 if(BestPosition != []):
                     err = await self.do(creep(BUILD_CREEPTUMOR_TUMOR, position.Point2(position.Pointlike((BestPosition[0],BestPosition[1])))))
                     print(err)
-                    if(err == None):
+                    if(err == ActionResult.CantSeeBuildLocation):
+                        self.RequestVisibilty.append(BestPosition)
+                    elif(err):
                         self.UnCreepable.append(BestPosition)
-        print(self.UnCreepable)
+        #print(self.UnCreepable)
 
+    async def Overlord_Control(self):
+        for Position in self.RequestVisibilty:
+            if Position not in self.PositionsVisibiltySent:
+                await self.do(self.units(OVERLORD).idle[0].attack(Position))
+                self.PositionsVisibiltySent.append(Position)
 
 run_game(maps.get("AbyssalReefLE"), [
     Bot(Race.Zerg, SentdeBot()),
